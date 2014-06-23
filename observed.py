@@ -2,7 +2,7 @@
 
 __author__ = "illabb13"
 __copyright__ = "Copyright 2014, illabb13"
-__version__ = '0.7 (WoT 0.9.1)'
+__version__ = '0.8 (WoT 0.9.1)'
 __email__ = "illabb13@gmail.com"
 
 import BigWorld
@@ -13,6 +13,10 @@ from constants import VEHICLE_MISC_STATUS
 from ChatManager import chatManager
 from gui.WindowsManager import g_windowsManager
 from constants import ARENA_GUI_TYPE
+from gui.Scaleform.Minimap import Minimap
+import math
+from messenger.proto.bw.battle_chat_cmd import SendChatCommandDecorator
+from chat_shared import CHAT_COMMANDS
 
 # ======================================================================================================================
 # дефолтные настройки
@@ -22,10 +26,11 @@ params = {
     'showWhenLess': 6,
     'limitationTypeOfBattles': 1,
     'message': 'Меня засветили, япона мать! :)',
-    'withoutHelpMe': 0,
-    'time': 8,
+    'helpMeOption': 2,
+    'cellClickOption': 2,
+    'timeEndMessage': 10,
     'endMessage': 'Прошло {time} секунд. Возможно ты уже не в засвете. Вперед за дамажкой!',
-    'enableHotKey': 1,
+    'enableHotKey': 1
 }
 
 try:
@@ -47,7 +52,7 @@ def show_player_panel_message(message, color='purple'):
 
 
 def show_observed_end_message():
-    message = params['endMessage'].format(time=params['time'])
+    message = params['endMessage'].format(time=params['timeEndMessage'])
     show_player_panel_message(message)
 
 # ======================================================================================================================
@@ -62,6 +67,8 @@ is_needle_battles_type = (
     ARENA_GUI_TYPE.COMPANY,    # Ротный бой
     ARENA_GUI_TYPE.CYBERSPORT  # Командный бой
 )
+
+map_size = Minimap._Minimap__MINIMAP_CELLS[1]
 
 # кастомные функции
 def custom_updateVehicleMiscStatus(self, vehicleID, code, intArg, floatArg):
@@ -81,10 +88,27 @@ def custom_updateVehicleMiscStatus(self, vehicleID, code, intArg, floatArg):
                 return
 
         team_channel_id = chatManager.battleTeamChannelID
+        minimap = g_windowsManager.battleWindow.minimap
         self.broadcast(team_channel_id, params['message'])
-        if not params['withoutHelpMe']:
+
+        if params['helpMeOption']:
+            # import CHAT_COMMANDS?
             self.broadcast(team_channel_id, '/HELPME')
-        BigWorld.callback(params['time'], show_observed_end_message)
+
+        if params['cellClickOption']:
+            position = self.position
+            bl, tr = self.arena.arenaType.boundingBox
+            arena_x, arena_z = tr.x - bl.x, tr.y - bl.y
+            real_pos_x, real_pos_z = position.x - bl.x, position.z - bl.y
+            column = math.trunc(real_pos_x / arena_x * map_size)
+            row = math.trunc((arena_z - real_pos_z) / arena_z * map_size)
+            cell = column * map_size + row
+            # minimap._Minimap__parentUI.chatCommands.sendAttentionToCell(cell)
+            decorator = SendChatCommandDecorator(CHAT_COMMANDS.ATTENTIONTOCELL, second=cell)
+            minimap._Minimap__parentUI.chatCommands._ChatCommandsController__sendChatCommand(decorator)
+
+        if params['timeEndMessage']:
+            BigWorld.callback(params['timeEndMessage'], show_observed_end_message)
 
 def custom_handleKey(self, isDown, key, mods):
     orig_handleKey(self, isDown, key, mods)
