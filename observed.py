@@ -2,7 +2,7 @@
 
 __author__ = "illabb13"
 __copyright__ = "Copyright 2014, illabb13"
-__version__ = '1.0 (WoT 0.9.1)'
+__version__ = '1.1 (WoT 0.9.3)'
 __email__ = "illabb13@gmail.com"
 
 import BigWorld
@@ -14,7 +14,6 @@ from gui.WindowsManager import g_windowsManager
 from constants import ARENA_GUI_TYPE, PREBATTLE_TYPE
 from gui.Scaleform.Minimap import Minimap
 from math import trunc
-from messenger.proto.bw.battle_chat_cmd import SendChatCommandDecorator
 from chat_shared import CHAT_COMMANDS
 from gui.BattleContext import g_battleContext
 from messenger import MessengerEntry
@@ -33,6 +32,7 @@ class ObservedMod(object):
     useSquadChat = 0
     helpMeOption = 0
     cellClickOption = 0
+    forceShowIfSPG = 1
     timeEndMessage = 10
     endMessage = 'Прошло {time} секунд. Возможно ты уже не в засвете. Вперед за дамажкой!'
     hotKey = [Keys.KEY_F10]
@@ -148,10 +148,13 @@ def custom_onEnterWorld(self, prereqs):
     if om.limitationTypeOfBattles and gui_type not in (ARENA_GUI_TYPE.UNKNOWN, ARENA_GUI_TYPE.TRAINING, ARENA_GUI_TYPE.COMPANY, ARENA_GUI_TYPE.CYBERSPORT):
         om.isEnabled = False
 
+    tags = self.vehicleTypeDescriptor.type.tags
     if len(om.enabledForVehType) != 5:
-        tags = self.vehicleTypeDescriptor.type.tags
         if not any(veh_type in tags for veh_type in om.enabledForVehType):
             om.isEnabled = False
+
+    if om.forceShowIfSPG and 'SPG' not in tags:
+        om.forceShowIfSPG = False
 
     if is_random:
         om.showWhenLess = om.showWhenLessInRandom
@@ -185,13 +188,14 @@ def custom_updateVehicleMiscStatus(self, vehicleID, code, intArg, floatArg):
                 controller.sendMessage(message)
 
         more_than_one = alive_count > 1
+        help_me = om.forceShowIfSPG == 1 or (om.helpMeOption and not om.useSquadChat)
+        cell_click = om.forceShowIfSPG == 2 or (om.cellClickOption and not om.useSquadChat)
 
-        if om.helpMeOption and not om.useSquadChat and more_than_one:
+        if help_me and more_than_one:
             g_windowsManager.battleWindow.chatCommands.sendCommand('HELPME')
 
-        if om.cellClickOption and not om.useSquadChat and more_than_one:
-            decorator = SendChatCommandDecorator(CHAT_COMMANDS.ATTENTIONTOCELL, second=cell)
-            g_windowsManager.battleWindow.chatCommands._ChatCommandsController__sendChatCommand(decorator)
+        if cell_click and more_than_one:
+            g_windowsManager.battleWindow.chatCommands.sendAttentionToCell(cell)
 
         if om.timeEndMessage:
             if om.endMessageCID is not None:
